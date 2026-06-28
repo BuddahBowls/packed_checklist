@@ -1,11 +1,691 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Packed — travel checklist</title>
+
+<!-- iOS home-screen / PWA hints -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Packed">
+<meta name="theme-color" content="#0F1318" id="themeColorMeta">
+
+<style>
+  :root{
+    --maxw: 640px;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --gap: 14px;
+    --board-bg: #0A0D11;
+    --board-text: #F2B33D;
+    --board-label: #7E6A3C;
+    --board-line: #1d242e;
+    --ease: cubic-bezier(.2,.7,.2,1);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  html[data-theme="dark"]{
+    --bg:#0F1318; --surface:#171D25; --surface-2:#1c2530;
+    --text:#E7ECF1; --muted:#8995A2; --faint:#5a6573;
+    --border:#252D38; --accent:#F2B33D; --accent-ink:#1a1407;
+    --danger:#F2685C; --shadow: 0 1px 0 rgba(255,255,255,.02);
+  }
+  html[data-theme="light"]{
+    --bg:#EEF1F4; --surface:#FFFFFF; --surface-2:#F4F6F8;
+    --text:#1B2027; --muted:#5d6772; --faint:#9aa4ae;
+    --border:#DEE3E9; --accent:#B5731A; --accent-ink:#fff;
+    --danger:#C0392B; --shadow: 0 2px 10px rgba(20,30,45,.06);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;}
+  body{
+    font-family:var(--font);
+    background:var(--bg); color:var(--text);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    padding:
+      env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    transition:background .25s var(--ease), color .25s var(--ease);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 16px 64px;}
+
+  /* ---------- Header ---------- */
+  header.app{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 2px 12px; position:sticky; top:0; z-index:20;
+    background:linear-gradient(var(--bg) 72%, transparent);
+  }
+  .brand{display:flex; align-items:baseline; gap:9px;}
+  .brand .mark{
+    font-weight:800; font-size:21px; letter-spacing:-.02em;
+  }
+  .brand .mark b{color:var(--accent);}
+  .brand .sub{
+    font-family:var(--mono); font-size:10px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--faint);
+  }
+  .icon-btn{
+    appearance:none; border:1px solid var(--border); background:var(--surface);
+    color:var(--text); width:40px; height:40px; border-radius:11px;
+    display:inline-flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .12s var(--ease), background .2s, border-color .2s;
+  }
+  .icon-btn:active{transform:scale(.92);}
+  .icon-btn svg{width:19px; height:19px; display:block;}
+
+  /* ---------- Departure board (key numbers) ---------- */
+  .board{
+    background:var(--board-bg); border-radius:var(--radius);
+    padding:14px 14px 10px; margin-top:4px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 6px 22px rgba(0,0,0,.28);
+    position:relative; overflow:hidden;
+  }
+  .board::before{
+    content:""; position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg, transparent 0 21px, rgba(255,255,255,.018) 21px 22px);
+    pointer-events:none;
+  }
+  .board-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:9px;
+  }
+  .board-head .title{
+    font-family:var(--mono); font-size:10px; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--board-label);
+    display:flex; align-items:center; gap:7px;
+  }
+  .board-head .dot{width:6px;height:6px;border-radius:50%;background:var(--board-text);
+    box-shadow:0 0 8px var(--board-text); animation:pulse 2.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+  .num-row{
+    display:grid; grid-template-columns: 96px 1fr auto; align-items:center;
+    gap:10px; padding:7px 0; border-top:1px solid var(--board-line);
+  }
+  .num-row:first-of-type{border-top:none;}
+  .num-code{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--board-label); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .num-val{
+    font-family:var(--mono); font-size:16px; letter-spacing:.04em;
+    color:var(--board-text); cursor:pointer; word-break:break-all;
+    background:none; border:none; padding:0; text-align:left; width:100%;
+  }
+  .num-val.empty{color:var(--board-label); font-style:italic; letter-spacing:0;}
+  .num-copy{
+    font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--board-label); opacity:0; transition:opacity .2s;
+  }
+  .num-row:active .num-copy{opacity:1;}
+  .board-empty{
+    font-family:var(--mono); font-size:11px; color:var(--board-label);
+    text-align:center; padding:10px 0 6px; letter-spacing:.05em;
+  }
+  /* board edit fields */
+  .num-edit{display:grid; grid-template-columns: 96px 1fr auto; gap:8px; align-items:center;
+    padding:7px 0; border-top:1px solid var(--board-line);}
+  .num-edit:first-of-type{border-top:none;}
+  .board input{
+    font-family:var(--mono); background:rgba(255,255,255,.04);
+    border:1px solid var(--board-line); color:var(--board-text);
+    border-radius:8px; padding:8px 9px; font-size:13px; width:100%;
+  }
+  .board input.code{color:var(--board-label); text-transform:uppercase; letter-spacing:.1em; font-size:11px;}
+  .board input::placeholder{color:#4a4129;}
+  .board input:focus{outline:none; border-color:var(--board-text);}
+  .mini-x{
+    appearance:none; border:none; background:rgba(242,104,92,.14); color:#f2685c;
+    width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:17px; line-height:1;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .mini-x:active{transform:scale(.9);}
+  .board-add{
+    width:100%; margin-top:8px; background:rgba(242,179,61,.1); color:var(--board-text);
+    border:1px dashed var(--board-line); border-radius:9px; padding:9px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    cursor:pointer;
+  }
+
+  /* ---------- Toolbar ---------- */
+  .progress{
+    display:flex; align-items:center; gap:11px; margin:18px 2px 12px;
+  }
+  .bar{flex:1; height:7px; border-radius:99px; background:var(--surface-2);
+    overflow:hidden; border:1px solid var(--border);}
+  .bar > i{display:block; height:100%; width:0%; background:var(--accent);
+    border-radius:99px; transition:width .35s var(--ease);}
+  .progress .count{font-family:var(--mono); font-size:12px; color:var(--muted);
+    white-space:nowrap; letter-spacing:.02em;}
+  .progress .count b{color:var(--text);}
+
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px;}
+  .tool{
+    appearance:none; border:1px solid var(--border); background:var(--surface);
+    color:var(--text); border-radius:11px; padding:9px 13px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600;
+    transition:transform .12s var(--ease), background .2s, opacity .2s, border-color .2s;
+  }
+  .tool svg{width:16px;height:16px;}
+  .tool:active{transform:scale(.95);}
+  .tool[disabled]{opacity:.38; pointer-events:none;}
+  .tool.primary{background:var(--accent); color:var(--accent-ink); border-color:transparent;}
+  .tool.flush{margin-left:auto;}
+
+  /* ---------- Categories & items ---------- */
+  .cat{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); margin-bottom:var(--gap);
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  .cat-head{
+    display:flex; align-items:center; gap:10px; padding:13px 14px 11px;
+  }
+  .cat-name{font-weight:700; font-size:15.5px; letter-spacing:-.01em; flex:1;}
+  .cat-name input{
+    font:inherit; font-weight:700; width:100%; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:8px; padding:6px 9px; color:var(--text);
+  }
+  .cat-count{font-family:var(--mono); font-size:11px; color:var(--faint);
+    background:var(--surface-2); padding:3px 8px; border-radius:7px; letter-spacing:.03em;}
+  .items{list-style:none; margin:0; padding:0 6px 6px;}
+  .item{
+    display:flex; align-items:center; gap:12px; padding:11px 8px;
+    border-radius:var(--radius-sm); cursor:pointer; position:relative;
+    transition:background .15s;
+  }
+  .item:active{background:var(--surface-2);}
+  .check{
+    flex:none; width:23px; height:23px; border-radius:7px;
+    border:2px solid var(--border); display:inline-flex; align-items:center; justify-content:center;
+    transition:background .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+  }
+  .check svg{width:14px; height:14px; stroke:var(--accent-ink); opacity:0; transform:scale(.4);
+    transition:opacity .18s, transform .18s var(--ease);}
+  .item.done .check{background:var(--accent); border-color:var(--accent);}
+  .item.done .check svg{opacity:1; transform:scale(1);}
+  .item .label{flex:1; font-size:15px; transition:color .18s, opacity .18s;}
+  .item.done .label{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--faint); opacity:.75;}
+  .item .label input{
+    font:inherit; width:100%; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; padding:6px 9px; color:var(--text);
+  }
+  .add-row{
+    display:flex; align-items:center; gap:10px; padding:9px 8px; margin:2px 0;
+  }
+  .add-row .plus{width:23px; text-align:center; color:var(--accent); font-size:20px; font-weight:600; flex:none;}
+  .add-row input{
+    flex:1; font:inherit; font-size:15px; background:transparent; border:none; color:var(--text);
+    padding:4px 0;
+  }
+  .add-row input::placeholder{color:var(--faint);}
+  .add-row input:focus{outline:none;}
+
+  .add-cat{
+    width:100%; border:1px dashed var(--border); background:transparent; color:var(--muted);
+    border-radius:var(--radius); padding:15px; font-size:14px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:border-color .2s, color .2s;
+  }
+  .add-cat:active{border-color:var(--accent); color:var(--accent);}
+  .add-cat svg{width:17px;height:17px;}
+
+  /* ---------- Modal ---------- */
+  .scrim{
+    position:fixed; inset:0; background:rgba(8,11,16,.55); backdrop-filter:blur(3px);
+    display:none; align-items:flex-end; justify-content:center; z-index:50; padding:0;
+  }
+  .scrim.open{display:flex;}
+  .sheet{
+    width:100%; max-width:var(--maxw); background:var(--surface);
+    border-radius:18px 18px 0 0; padding:20px 18px calc(22px + env(safe-area-inset-bottom));
+    border:1px solid var(--border); border-bottom:none;
+    animation:rise .26s var(--ease);
+  }
+  @keyframes rise{from{transform:translateY(30px); opacity:.5}to{transform:translateY(0);opacity:1}}
+  .sheet h2{margin:0 0 4px; font-size:18px; letter-spacing:-.01em;}
+  .sheet p{margin:0 0 14px; color:var(--muted); font-size:13px; line-height:1.5;}
+  .sheet textarea{
+    width:100%; height:130px; resize:vertical; font-family:var(--mono); font-size:12px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
+    padding:11px; color:var(--text); line-height:1.5;
+  }
+  .sheet textarea:focus{outline:none; border-color:var(--accent);}
+  .sheet-actions{display:flex; gap:9px; margin-top:13px; flex-wrap:wrap;}
+  .sheet-actions .tool{flex:1; justify-content:center;}
+  .field-label{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--faint); margin:14px 0 6px;}
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%) translateY(20px);
+    bottom:calc(22px + env(safe-area-inset-bottom)); z-index:60;
+    background:var(--text); color:var(--bg); padding:11px 16px; border-radius:12px;
+    font-size:13.5px; font-weight:600; box-shadow:0 8px 30px rgba(0,0,0,.3);
+    opacity:0; pointer-events:none; transition:opacity .22s, transform .22s var(--ease);
+    display:flex; align-items:center; gap:14px; max-width:90vw;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast button{background:none;border:none;color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;}
+
+  .editing-hint{
+    font-size:12px; color:var(--muted); text-align:center; margin:-6px 0 14px;
+    font-family:var(--mono); letter-spacing:.03em;
+  }
+
+  @media (prefers-reduced-motion: reduce){ *{animation:none!important; transition:none!important;} }
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+</style>
 </head>
 <body>
-    
+<div class="wrap">
+  <header class="app">
+    <div class="brand">
+      <span class="mark">Pack<b>ed</b></span>
+      <span class="sub">checklist</span>
+    </div>
+    <button class="icon-btn" id="themeBtn" aria-label="Toggle light or dark mode"></button>
+  </header>
+
+  <!-- Key numbers: departure board -->
+  <section class="board" id="board"></section>
+
+  <!-- Progress -->
+  <div class="progress">
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="count"><b id="packedN">0</b> / <span id="totalN">0</span> packed</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="tool" id="undoBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>Undo</button>
+    <button class="tool" id="redoBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg>Redo</button>
+    <button class="tool" id="clearBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6 18 20H6L5 6"/></svg>Clear</button>
+    <button class="tool" id="backupBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Backup</button>
+    <button class="tool flush" id="editBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</button>
+  </div>
+
+  <p class="editing-hint" id="editHint" style="display:none">Editing — rename, delete, or reorder. Tap Done when finished.</p>
+
+  <!-- Checklist -->
+  <main id="list"></main>
+
+  <button class="add-cat" id="addCatBtn" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    Add category
+  </button>
+</div>
+
+<!-- Backup sheet -->
+<div class="scrim" id="scrim">
+  <div class="sheet">
+    <h2>Backup &amp; restore</h2>
+    <p>Your list lives on this device. Copy or download this text to keep a backup — paste it back anytime to restore everything, including your numbers.</p>
+    <div class="field-label">Your data</div>
+    <textarea id="exportArea" readonly spellcheck="false"></textarea>
+    <div class="sheet-actions">
+      <button class="tool primary" id="copyBtn">Copy</button>
+      <button class="tool" id="downloadBtn">Download .json</button>
+    </div>
+    <div class="field-label">Restore from a backup</div>
+    <textarea id="importArea" placeholder="Paste a backup here…" spellcheck="false"></textarea>
+    <div class="sheet-actions">
+      <button class="tool" id="restoreBtn">Restore</button>
+      <button class="tool" id="closeSheet">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- storage with graceful fallback ----------
+   Persists via localStorage when available (your hosted GitHub Pages copy).
+   Falls back to in-memory if a sandbox blocks it (e.g. an in-chat preview),
+   so nothing crashes — it just won't survive a reload in that case. */
+const store = (() => {
+  let ok = true, mem = {};
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
+  catch(e){ ok = false; }
+  return {
+    persistent: ok,
+    get(k){ try{ return ok ? localStorage.getItem(k) : (k in mem ? mem[k] : null); }catch(e){ return k in mem ? mem[k] : null; } },
+    set(k,v){ try{ ok ? localStorage.setItem(k,v) : (mem[k]=v); }catch(e){ mem[k]=v; } }
+  };
+})();
+
+const KEY = "packed.v1";
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ---------- default starter list ---------- */
+function seed(){
+  return {
+    theme: (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark",
+    numbers: [
+      { id:uid(), code:"TSA PreCheck", value:"" },
+      { id:uid(), code:"Passport", value:"" },
+      { id:uid(), code:"Frequent flyer", value:"" }
+    ],
+    categories: [
+      { id:uid(), name:"Documents & money", items:["Passport / ID","Wallet & cards","Boarding passes","Insurance card"].map(n=>({id:uid(),name:n,checked:false})) },
+      { id:uid(), name:"Clothing", items:["Shirts","Underwear","Socks","Pants","Sleepwear","Light jacket"].map(n=>({id:uid(),name:n,checked:false})) },
+      { id:uid(), name:"Toiletries", items:["Toothbrush & paste","Deodorant","Razor","Skincare","Medications"].map(n=>({id:uid(),name:n,checked:false})) },
+      { id:uid(), name:"Electronics", items:["Phone charger","Battery pack","Headphones","Laptop & charger","Adapters"].map(n=>({id:uid(),name:n,checked:false})) }
+    ]
+  };
+}
+
+/* ---------- state ---------- */
+let state, editing = false;
+let undoStack = [], redoStack = [];
+
+function load(){
+  const raw = store.get(KEY);
+  if(raw){ try{ state = JSON.parse(raw); }catch(e){ state = seed(); } }
+  else state = seed();
+  // shape guards
+  state.numbers ||= []; state.categories ||= [];
+  state.theme ||= "dark";
+}
+function save(){ store.set(KEY, JSON.stringify(state)); }
+
+/* content snapshot for undo/redo (numbers + checklist, not theme) */
+function snapshot(){ return JSON.stringify({numbers:state.numbers, categories:state.categories}); }
+function commit(mutator){
+  undoStack.push(snapshot());
+  if(undoStack.length > 120) undoStack.shift();
+  redoStack = [];
+  mutator();
+  save(); render();
+}
+function applySnap(s){ const o = JSON.parse(s); state.numbers = o.numbers; state.categories = o.categories; }
+function undo(){
+  if(!undoStack.length) return;
+  redoStack.push(snapshot());
+  applySnap(undoStack.pop());
+  save(); render();
+}
+function redo(){
+  if(!redoStack.length) return;
+  undoStack.push(snapshot());
+  applySnap(redoStack.pop());
+  save(); render();
+}
+
+/* ---------- theme ---------- */
+const sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+function applyTheme(){
+  document.documentElement.setAttribute("data-theme", state.theme);
+  document.getElementById("themeBtn").innerHTML = state.theme === "dark" ? sun : moon;
+  document.getElementById("themeColorMeta").setAttribute("content", state.theme === "dark" ? "#0F1318" : "#EEF1F4");
+}
+
+/* ---------- render ---------- */
+const $ = s => document.querySelector(s);
+
+function render(){
+  applyTheme();
+  renderBoard();
+  renderList();
+  renderProgress();
+  $("#undoBtn").disabled = undoStack.length === 0;
+  $("#redoBtn").disabled = redoStack.length === 0;
+  $("#editHint").style.display = editing ? "block" : "none";
+  $("#addCatBtn").style.display = editing ? "flex" : "none";
+  $("#editBtn").classList.toggle("primary", editing);
+  $("#editBtn").lastChild.textContent = editing ? "Done" : "Edit";
+}
+
+function renderBoard(){
+  const b = $("#board");
+  let h = `<div class="board-head"><span class="title"><span class="dot"></span>Travel numbers</span>
+           <span class="title" style="color:var(--board-label)">${editing ? "edit" : "tap to copy"}</span></div>`;
+  if(editing){
+    state.numbers.forEach(n=>{
+      h += `<div class="num-edit" data-id="${n.id}">
+        <input class="code" data-f="code" value="${esc(n.code)}" placeholder="LABEL">
+        <input data-f="value" value="${esc(n.value)}" placeholder="number">
+        <button class="mini-x" data-del-num="${n.id}" aria-label="Delete">×</button></div>`;
+    });
+    h += `<button class="board-add" id="addNumBtn">+ add number</button>`;
+  } else {
+    if(!state.numbers.length){
+      h += `<div class="board-empty">No numbers yet — tap Edit to add your TSA PreCheck, frequent flyer, etc.</div>`;
+    }
+    state.numbers.forEach(n=>{
+      const empty = !n.value.trim();
+      h += `<div class="num-row" ${empty?"":`data-copy="${esc(n.value)}"`}>
+        <span class="num-code">${esc(n.code)||"—"}</span>
+        <span class="num-val ${empty?"empty":""}">${empty ? "not set" : esc(n.value)}</span>
+        <span class="num-copy">copy</span></div>`;
+    });
+  }
+  b.innerHTML = h;
+}
+
+function renderList(){
+  const list = $("#list");
+  list.innerHTML = state.categories.map(cat=>{
+    const done = cat.items.filter(i=>i.checked).length;
+    const items = cat.items.map(it=>{
+      if(editing){
+        return `<li class="item ${it.checked?"done":""}" data-cat="${cat.id}">
+          <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 6"/></svg></span>
+          <span class="label"><input data-rename-item="${it.id}" data-cat="${cat.id}" value="${esc(it.name)}"></span>
+          <button class="mini-x" data-del-item="${it.id}" data-cat="${cat.id}" aria-label="Delete item">×</button></li>`;
+      }
+      return `<li class="item ${it.checked?"done":""}" data-toggle="${it.id}" data-cat="${cat.id}">
+        <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 6"/></svg></span>
+        <span class="label">${esc(it.name)}</span></li>`;
+    }).join("");
+
+    const head = editing
+      ? `<div class="cat-head">
+           <span class="cat-name"><input data-rename-cat="${cat.id}" value="${esc(cat.name)}"></span>
+           <button class="mini-x" data-del-cat="${cat.id}" aria-label="Delete category">×</button></div>`
+      : `<div class="cat-head">
+           <span class="cat-name">${esc(cat.name)}</span>
+           <span class="cat-count">${done}/${cat.items.length}</span></div>`;
+
+    return `<section class="cat" data-cat="${cat.id}">${head}
+      <ul class="items">${items}
+        <li class="add-row"><span class="plus">+</span>
+          <input data-add-item="${cat.id}" placeholder="Add item…" enterkeyhint="done"></li>
+      </ul></section>`;
+  }).join("");
+}
+
+function renderProgress(){
+  let total=0, done=0;
+  state.categories.forEach(c=>c.items.forEach(i=>{ total++; if(i.checked) done++; }));
+  $("#packedN").textContent = done;
+  $("#totalN").textContent = total;
+  $("#barFill").style.width = total ? (done/total*100)+"%" : "0%";
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg, actionLabel, action){
+  const t = $("#toast");
+  t.innerHTML = esc(msg) + (actionLabel ? ` <button id="toastAct">${esc(actionLabel)}</button>` : "");
+  t.classList.add("show");
+  if(actionLabel) $("#toastAct").onclick = ()=>{ action(); hideToast(); };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, actionLabel ? 4200 : 1800);
+}
+function hideToast(){ $("#toast").classList.remove("show"); }
+
+/* ---------- event wiring ---------- */
+function findCat(id){ return state.categories.find(c=>c.id===id); }
+
+// theme
+$("#themeBtn").onclick = ()=>{ state.theme = state.theme==="dark"?"light":"dark"; save(); applyTheme(); };
+
+// undo / redo / clear / edit / backup
+$("#undoBtn").onclick = undo;
+$("#redoBtn").onclick = redo;
+$("#editBtn").onclick = ()=>{ editing = !editing; render(); };
+$("#clearBtn").onclick = ()=>{
+  const anyChecked = state.categories.some(c=>c.items.some(i=>i.checked));
+  if(!anyChecked){ toast("Nothing checked yet"); return; }
+  commit(()=> state.categories.forEach(c=>c.items.forEach(i=> i.checked=false)));
+  toast("Unchecked everything", "Undo", undo);
+};
+$("#addCatBtn").onclick = ()=> commit(()=> state.categories.push({id:uid(), name:"New category", items:[]}));
+
+// delegated taps on the list
+$("#list").addEventListener("click", e=>{
+  const tog = e.target.closest("[data-toggle]");
+  if(tog){
+    const cat = findCat(tog.dataset.cat); if(!cat) return;
+    const it = cat.items.find(i=>i.id===tog.dataset.toggle); if(!it) return;
+    commit(()=> it.checked = !it.checked);
+    return;
+  }
+  const delItem = e.target.closest("[data-del-item]");
+  if(delItem){
+    const cat = findCat(delItem.dataset.cat); if(!cat) return;
+    commit(()=> cat.items = cat.items.filter(i=>i.id!==delItem.dataset.delItem));
+    toast("Item deleted", "Undo", undo);
+    return;
+  }
+  const delCat = e.target.closest("[data-del-cat]");
+  if(delCat){
+    commit(()=> state.categories = state.categories.filter(c=>c.id!==delCat.dataset.delCat));
+    toast("Category deleted", "Undo", undo);
+    return;
+  }
+});
+
+// renames + add item (commit on change/enter)
+$("#list").addEventListener("change", e=>{
+  const t = e.target;
+  if(t.dataset.renameItem){
+    const cat = findCat(t.dataset.cat); const it = cat && cat.items.find(i=>i.id===t.dataset.renameItem);
+    if(it) commit(()=> it.name = t.value.trim() || it.name);
+  } else if(t.dataset.renameCat){
+    const cat = findCat(t.dataset.renameCat);
+    if(cat) commit(()=> cat.name = t.value.trim() || cat.name);
+  }
+});
+$("#list").addEventListener("keydown", e=>{
+  if(e.key!=="Enter") return;
+  const t = e.target;
+  if(t.dataset.addItem){
+    const name = t.value.trim(); if(!name) return;
+    const cat = findCat(t.dataset.addItem); if(!cat) return;
+    const keep = t; e.preventDefault();
+    commit(()=> cat.items.push({id:uid(), name, checked:false}));
+    // refocus the (re-rendered) add field for this category
+    const again = document.querySelector(`[data-add-item="${cat.id}"]`);
+    if(again){ again.focus(); }
+  } else if(t.dataset.renameItem || t.dataset.renameCat){
+    t.blur();
+  }
+});
+
+// board: copy, edit, add, delete
+$("#board").addEventListener("click", e=>{
+  const row = e.target.closest("[data-copy]");
+  if(row){ copyText(row.dataset.copy, "Copied"); return; }
+  if(e.target.id==="addNumBtn"){
+    commit(()=> state.numbers.push({id:uid(), code:"NEW", value:""}));
+    return;
+  }
+  const del = e.target.closest("[data-del-num]");
+  if(del){ commit(()=> state.numbers = state.numbers.filter(n=>n.id!==del.dataset.delNum)); toast("Number removed","Undo",undo); }
+});
+$("#board").addEventListener("change", e=>{
+  const wrap = e.target.closest(".num-edit"); if(!wrap) return;
+  const n = state.numbers.find(x=>x.id===wrap.dataset.id); if(!n) return;
+  const f = e.target.dataset.f;
+  commit(()=>{ n[f] = e.target.value; });
+});
+
+/* ---------- backup sheet ---------- */
+function openSheet(){
+  $("#exportArea").value = JSON.stringify(state, null, 2);
+  $("#importArea").value = "";
+  $("#scrim").classList.add("open");
+}
+function closeSheet(){ $("#scrim").classList.remove("open"); }
+$("#backupBtn").onclick = openSheet;
+$("#closeSheet").onclick = closeSheet;
+$("#scrim").addEventListener("click", e=>{ if(e.target.id==="scrim") closeSheet(); });
+
+$("#copyBtn").onclick = ()=> copyText($("#exportArea").value, "Backup copied");
+$("#downloadBtn").onclick = ()=>{
+  const blob = new Blob([$("#exportArea").value], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `packed-backup-${d}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  toast("Backup downloaded");
+};
+$("#restoreBtn").onclick = ()=>{
+  const txt = $("#importArea").value.trim();
+  if(!txt){ toast("Paste a backup first"); return; }
+  let data;
+  try{ data = JSON.parse(txt); }
+  catch(e){ toast("That doesn't look like valid backup text"); return; }
+  if(!data || !Array.isArray(data.categories) || !Array.isArray(data.numbers)){
+    toast("Backup is missing its list or numbers"); return;
+  }
+  commit(()=>{ state.numbers = data.numbers; state.categories = data.categories; });
+  if(data.theme){ state.theme = data.theme; save(); }
+  closeSheet();
+  toast("Restored from backup", "Undo", undo);
+};
+
+/* ---------- clipboard with fallback ---------- */
+function copyText(text, okMsg){
+  const done = ()=> toast(okMsg || "Copied");
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(()=>legacyCopy(text,done));
+  } else legacyCopy(text, done);
+}
+function legacyCopy(text, done){
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand("copy"); done(); }catch(e){ toast("Couldn't copy — select and copy manually"); }
+  ta.remove();
+}
+
+/* ---------- minimal web-app manifest (helps Android / installability) ---------- */
+try{
+  const man = {
+    name:"Packed", short_name:"Packed", display:"standalone",
+    background_color:"#0F1318", theme_color:"#0F1318", start_url:"./",
+    icons:[]
+  };
+  const blob = new Blob([JSON.stringify(man)], {type:"application/manifest+json"});
+  const link = document.createElement("link");
+  link.rel="manifest"; link.href=URL.createObjectURL(blob);
+  document.head.appendChild(link);
+}catch(e){}
+
+/* ---------- boot ---------- */
+load();
+render();
+if(!store.persistent){
+  setTimeout(()=> toast("Preview mode: changes won't be saved here — they will once it's hosted"), 600);
+}
+</script>
 </body>
 </html>
